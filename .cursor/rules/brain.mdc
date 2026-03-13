@@ -1,0 +1,65 @@
+﻿---
+description: Cursor Brain - persistent project memory across sessions. Reads brain/ on conversation start, supports update/search/stats/ask/recent commands.
+alwaysApply: true
+---
+
+# Cursor Brain
+
+You have access to a persistent memory system in the `brain/` folder of this project.
+
+## On Conversation Start
+
+1. Check if `brain/` folder exists in the project root.
+2. If it does NOT exist, inform the user: "No brain folder found. Say **brain init** to create one, or run `brain-init` in your terminal."
+3. If it exists, silently read these files (do NOT announce that you are reading them):
+   - `brain/progress.md` (current project snapshot â€” always read this first)
+   - The 2-3 most recent files in `brain/sessions/` (sorted by filename descending)
+   - `brain/project-context.md` only if `progress.md` is empty or has only template placeholders
+4. Use this context to inform your responses naturally. Do not mention the brain system unless the user asks about it.
+
+## Commands
+
+### "update brain"
+1. OVERWRITE `brain/progress.md` entirely with a fresh snapshot containing:
+   - **Current Status**: What the project state is right now
+   - **Recently Completed**: What was accomplished in this session
+   - **Next Steps**: What should be done next
+   - **Active Issues**: Any unresolved problems or blockers
+2. If significant decisions were made, APPEND to `brain/decisions.md` using this format:
+   ```
+   ## YYYY-MM-DD: [Decision Title]
+   **Choice**: What was chosen
+   **Over**: What alternatives were considered
+   **Because**: The rationale
+   ```
+
+### "closing for today" or "update brain, closing for today"
+1. Do everything from "update brain" above.
+2. Additionally, WRITE or APPEND to `brain/sessions/YYYY-MM-DD.md`:
+   - **Summary**: 2-3 sentence overview of the day's work
+   - **Files Modified**: List of files created or changed
+   - **Key Changes**: What was built, fixed, or refactored
+   - **Problems Solved**: Issues encountered and how they were resolved
+   - **Open Questions**: Unresolved items for next session
+
+### "brain search [query]"
+Read through ALL files in `brain/` including all session files and decisions. Find and present entries relevant to the query with source file references.
+
+### "brain stats"
+Report: number of session files and their date range, number of decisions logged, last-updated date of progress.md, and an estimate of total brain content size.
+
+### "brain recent"
+Read and summarize the last 3-5 session files from `brain/sessions/`.
+
+### "brain ask [question]"
+Read all brain files and answer the question using only the stored context. Cite which brain file each piece of the answer came from.
+
+### "brain init"
+Create the `brain/` folder with template files (`README.md`, `project-context.md`, `progress.md`, `decisions.md`, `sessions/`) if it does not already exist. Then ask the user to describe their project so you can fill in `project-context.md`.
+
+## Growth Rules
+
+- `progress.md` is always OVERWRITTEN, not appended. It should never exceed ~50 lines.
+- `decisions.md` is append-only. If it exceeds 100 entries, move older entries to `brain/decisions-archive.md`.
+- Session files are individual daily files. Only the last 2-3 are read on conversation start. Older ones are available via "brain search" and "brain recent".
+- `project-context.md` is written once and updated only when the project fundamentally changes.

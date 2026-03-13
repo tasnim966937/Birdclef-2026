@@ -1,0 +1,39 @@
+---
+description: BirdCLEF 2026 project context and conventions
+alwaysApply: true
+---
+
+# BirdCLEF+ 2026 Competition Project
+
+## Communication Style
+- Always answer in short, easy sentences.
+- User is a remote sensing expert, beginner in deep learning and audio ML.
+- Use remote sensing analogies when explaining audio concepts (bands = frequency bins, raster = spectrogram).
+
+## Competition Summary
+- Task: identify 234 wildlife species from audio in Pantanal, Brazil.
+- Multi-label classification: each 5-second window can have multiple species.
+- Metric: macro ROC-AUC (skips classes with no true positives).
+- Submission: Kaggle Code Competition, CPU-only inference, 90 minutes max.
+
+## Data Layout (Linux VM)
+- Base: `/data/scratch/scienceteam/jupyter-mir/bird/Data/birdclef-2026/`
+- `train_audio/` -- 35,549 clean clips, 206 species, OGG format
+- `train_soundscapes/` -- 10,658 field recordings (66 labeled, 10,592 unlabeled)
+- `train_soundscapes_labels.csv` -- 1,478 rows, multi-label, 75 species
+- 28 species have NO individual training clips (25 insect sonotypes + 3 amphibians)
+- `test_soundscapes/` -- hidden, populated only on Kaggle servers
+
+## Environment
+- Linux VM with A40 GPU (48GB VRAM) for training
+- Conda env: `bird` (Python 3.11)
+- Key packages: PyTorch, timm, librosa, torchaudio, tensorflow, birdnetlib
+
+## Model Plan
+- Phase A: EDA (DONE)
+- Phase B: BirdNET baseline (DONE -- saw how it works on one clip)
+- Phase C: Custom EfficientNet-B0 on mel spectrograms (NEXT)
+  - Stage 1: train on train_audio
+  - Stage 2: pseudo-label unlabeled soundscapes
+  - Stage 3: fine-tune with soundscapes
+  - Export to ONNX for CPU inference

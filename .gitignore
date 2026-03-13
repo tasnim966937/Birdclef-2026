@@ -1,0 +1,31 @@
+# Competition data (15GB+)
+Data/
+
+# Model weights (will add only final inference models later)
+models/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Video rendering temp files
+video_temp/
+
+# OS junk
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# Conda/venv
+*.egg-info/
+dist/
+build/
