@@ -18,8 +18,8 @@ todos:
     content: "Phase C1: Validate on held-out fold, compute macro ROC-AUC"
     status: pending
   - id: c2-pseudo
-    content: "Phase C2: Pseudo-label 10,592 unlabeled soundscapes with C1 model"
-    status: pending
+    content: "Phase C2: Pseudo-label 10,592 unlabeled soundscapes with C1 model -- DONE (127,104 rows)"
+    status: completed
   - id: c2-retrain
     content: "Phase C2: Retrain with MixUp ratio 1.0, Stochastic Depth, WeightedRandomSampler"
     status: pending
@@ -57,7 +57,13 @@ isProject: false
 - Phase A (EDA): DONE
 - Phase B (BirdNET): DONE (understood audio classification flow)
 - Phase C0 (Simple EfficientNet-B0, 5-sec, BCE, no SED): DONE -- 0.968 CV AUC
-- Phase C1 (EfficientNet-B0 + SED, 20-sec, CrossEntropy): IN PROGRESS -- Fold 0 training running
+- Phase C1 (EfficientNet-B0 + SED, 20-sec, CrossEntropy): DONE -- **0.9773 mean CV AUC** (+/- 0.0036)
+  - Fold 0: 0.9724 (early stopped epoch 12)
+  - Fold 1: 0.9755 (ran all 15 epochs, still improving)
+  - Fold 2: 0.9785
+  - Fold 3: 0.9821 (best fold)
+  - Fold 4: 0.9780
+  - Note: Fold 1 was still improving at epoch 15 -- more epochs will help in C2/C3
 
 ## Competition Constraints
 
@@ -152,7 +158,7 @@ This model is **not** used as a starting point for C1. C1 is a completely new ar
 - Use **Stochastic Depth** (drop_path_rate=0.15) -- only during self-training
 - Add **WeightedRandomSampler** for pseudo-labels (weight = sum of max probs per soundscape)
 - Include the 66 labeled soundscapes in training
-- Epochs: 25-35
+- Epochs: 25-35 (C1 Fold 1 was still improving at epoch 15 -- more epochs clearly help)
 - Also train a `regnety_008.pycls_in1k` for diversity
 
 ---
@@ -231,7 +237,87 @@ Expected progression (based on 2025 1st place):
 
 ---
 
-## Key Techniques Reference
+## 2025 Top Solutions Summary
+
+### 1st Place -- Nikita Babych (Private LB: 0.930)
+
+- Multi-iterative noisy student (4 rounds of pseudo-labeling)
+- 20-sec chunks, SED head, CrossEntropy loss
+- MixUp ratio 1.0, Stochastic Depth 0.15
+- Power transform on pseudo-labels
+- 7-model ensemble (EfficientNet-B0/B3/B4, RegNetY, ECA-NFNet-L0)
+- Separate Amphibia/Insecta model
+- ONNX -> OpenVINO fp16 for CPU inference
+- 408 submissions
+
+### 2nd Place -- volodymyr vialactea (Private LB: 0.928)
+
+- Pre-trained on BirdCLEF 2021-2025 data
+- OpenVINO fp16 export
+- 424 submissions
+
+### 3rd Place -- Leon&Simon (Private LB: 0.928)
+
+- 100% BirdCLEF 2025 for training + 80% of BirdCLEF 2023 fold for extra training
+- 20% of BirdCLEF 2023 fold as **stable validation set** (better CV-LB correlation)
+- Extra data from Xeno-Canto and iNaturalist
+- Cleaned CSA dataset (removed human voices, manual quality filter)
+- Both CNN and SED models
+- Backbones: `tf_efficientnet_b0_ns`, `tf_efficientnetv2_b3`, `tf_efficientnetv2_s.in21k_ft_in1k`, `mnasnet_100`, `spnasnet_100`
+- Two mel param sets: n_mels=128 and n_mels=96 (n_fft=2048, hop=512)
+- Focal BCE loss
+- Augmentations: cutmix, mixup, sumix + human voice noise
+- Model soup (weight averaging across checkpoints)
+- Rank-aware post-processing with power adjustment
+- 20 models ensemble (10 CNN + 10 SED = 5 backbones x 2 mel params)
+- Best private LB from 12 models (without mnasnet/spnasnet)
+- ONNX export
+- 288 submissions
+
+### 4th Place -- Dylan Liu (Private LB: 0.924, jumped +7 from public LB)
+
+- **Soft AUC Loss** -- directly optimizes the competition metric
+  - CV scores looked worse than CrossEntropy, but LB scores were significantly better
+  - Supports soft labels for pseudo-labeling (SoftAUCLoss variant)
+  - Single EfficientNet-B0 went from 0.850 to 0.901 with Soft AUC + semi-supervised
+- SED architecture inspired by BirdCLEF 2023 2nd place
+- Smaller hop_length=64, larger n_mels=256 (finer resolution)
+- Audio mixup (add waveforms, max of labels)
+- 16-model ensemble: efficientnet_lite0-4, efficientnet_b2-3, efficientnetv2_b2-3, efficientnetv2_s
+- 3 types of mel spectrogram parameters for diversity
+- 10-sec chunks (first 10s and random 10s)
+- 17-25 epochs, lr=5e-4
+- **Things that did NOT help (4th place):** pretraining on past years, knowledge distillation, non-EfficientNet models, data normalizations other than 2D batch norm
+- Code: https://github.com/dylanliu2/BirdCLEF2025-4th-place-solution
+- 274 submissions
+
+---
+
+## Techniques to Experiment With
+
+These are promising techniques from top solutions that we should test but haven't committed to yet:
+
+### High Priority
+
+- **Soft AUC Loss** (from 4th place): Directly optimizes the competition metric. Could replace or complement CrossEntropy. Try in C2 or C3 once we have a baseline to compare. Code available in 4th place GitHub repo.
+- **Multiple mel spectrogram parameter sets** (from 3rd and 4th place): Train some ensemble members with different mel configs (e.g., n_mels=128/hop=512 alongside our n_mels=224/hop=1252). Cheap diversity boost for ensemble.
+- **BirdCLEF 2023 data as stable validation set** (from 3rd place): Use 20% of a BirdCLEF 2023 fold as validation instead of intra-year splits. Better CV-LB correlation.
+
+### Medium Priority
+
+- **Focal BCE loss** (from 3rd place): Alternative to CrossEntropy that down-weights easy examples. Could help with class imbalance.
+- **Human voice noise augmentation** (from 3rd place): Add human speech as background noise during training for robustness.
+- **Rank-aware post-processing** (from 3rd place): Adjust low-confidence predictions based on ranking.
+- **Smaller hop_length=64** (from 4th place): Much finer time resolution. Tradeoff: larger spectrograms, more compute.
+
+### Caution -- Conflicting Evidence
+
+- **Pretraining on past years**: Helped 2nd place, did NOT help 4th place. Test carefully.
+- **Non-EfficientNet backbones**: Used by 1st place (RegNetY, ECA-NFNet), but 4th place says they didn't help. May depend on loss function and training strategy.
+
+---
+
+## Key Techniques Reference (Currently in Our Plan)
 
 
 | Technique                       | Source                 | Impact                             |
@@ -243,9 +329,14 @@ Expected progression (based on 2025 1st place):
 | Power transform pseudo-labels   | 2025 1st               | enables multi-iteration            |
 | Weighted pseudo-label sampler   | 2025 1st               | stabilizes training                |
 | CrossEntropy loss               | 2025 1st               | slight edge over BCE               |
+| Soft AUC Loss                   | 2025 4th               | +0.05 single model, better LB      |
 | Overlapping sliding window      | 2025 1st               | +0.002-0.003                       |
 | Separate Amphibia/Insecta model | 2025 1st               | +0.002-0.003                       |
-| Checkpoint soup                 | 2024 2nd               | free boost                         |
+| Checkpoint soup                 | 2024 2nd, 2025 3rd     | free boost                         |
+| Multiple mel param sets         | 2025 3rd, 4th          | ensemble diversity                 |
+| Stable val set (past year data) | 2025 3rd               | better CV-LB correlation           |
 | Data quality filtering (80%)    | 2024 1st               | cleaner training                   |
-| Pre-train on past years         | 2025 2nd               | better initialization              |
+| Pre-train on past years         | 2025 2nd               | better initialization (disputed)   |
+| Focal BCE loss                  | 2025 3rd               | alternative to CE                  |
 | OpenVINO fp16                   | 2025 2nd               | fast CPU inference                 |
+| ONNX export                     | 2025 3rd, 4th          | fast CPU inference                 |
