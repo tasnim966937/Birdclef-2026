@@ -35,15 +35,32 @@
 **Over**: Non-overlapping windows, single model
 **Because**: Overlapping windows reduce noise. 5-fold ensemble is more robust. 2025 1st place used this exact approach. Generated 127,104 pseudo-label rows in 53 minutes.
 
-## 2026-03-11: MixUp ratio 1.0 for C2
+## 2026-03-11: MixUp ratio 1.0 for C2 v1 (REVISED in v2)
 **Choice**: Every clean sample mixed 50/50 with a pseudo-labeled soundscape sample
 **Over**: Random MixUp within clean data only (C1 approach)
-**Because**: 2025 1st place reported +0.026 AUC from MixUp ratio 1.0 vs 0. Forces model to learn species in noisy multi-species context.
+**Because**: 2025 1st place reported +0.026 AUC from MixUp ratio 1.0 vs 0.
+**Outcome**: Over-regularized B0 (4.3M params). Train loss barely moved (~479->474 in 27 epochs). Val AUC stuck at ~0.84 vs C1's 0.977. The 1st place winner used this with larger backbones (B3, NFNet-L0) that had more capacity.
 
-## 2026-03-11: Stochastic Depth 0.15 for C2
+## 2026-03-11: Stochastic Depth 0.15 for C2 v1 (REVISED in v2)
 **Choice**: drop_path_rate=0.15 during C2 training
 **Over**: No drop path (C1)
-**Because**: 2025 1st place reported +0.005 per model. Acts as regularization during semi-supervised training. Minimal compute overhead.
+**Because**: 2025 1st place reported +0.005 per model.
+**Outcome**: Combined with MixUp 1.0, this was too much regularization for B0. Reduced to 0.05 in v2.
+
+## 2026-03-11: C2 v2 -- reduce over-regularization
+**Choice**: MixUp prob=0.5 (50% pure clean batches), Beta(0.4,0.4) blend weights, drop_path=0.05
+**Over**: C2 v1's MixUp 1.0 + drop_path=0.15
+**Because**: C2 v1 proved B0 can't handle that level of regularization. Model must see pure clean samples to learn strong species features. Variable blend weights add diversity. Lower drop_path preserves more model capacity.
+
+## 2026-03-11: Pre-compute spectrograms to disk
+**Choice**: Save all mel spectrograms as .npy files (float16), load via np.load + torch.from_numpy
+**Over**: On-the-fly audio decoding + FFT computation
+**Because**: C2 v1 spent ~24 min/epoch with GPU idle most of the time, waiting for CPU to decode audio and compute FFT. With 64 cores and only num_workers=4, the CPU was the bottleneck. Pre-computed specs reduce epoch time to ~3-5 min (5x speedup). Machine has 1 TB RAM -- OS file cache will automatically keep frequently accessed files in memory.
+
+## 2026-03-11: Dual validation (clean + soundscape)
+**Choice**: Validate on both clean clips (per-fold holdout) and all 1,478 labeled soundscape segments
+**Over**: C2 v1's clean-clip-only validation
+**Because**: Clean-clip AUC measures species discrimination but doesn't reflect real test conditions. Soundscape AUC measures actual multi-species identification in noisy field recordings. Model saved by soundscape AUC (the metric that matters for Kaggle). Clean AUC logged as sanity check.
 
 ## 2026-03-11: Models excluded from git
 **Choice**: Gitignore all model weights, push only code
